@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Schema Drift Detector</title>
+    <style>
+        :root {
+            --bg-color: #0f0f1a;
+            --card-bg: #1a1a2e;
+            --accent-blue: #4fc3f7;
+            --healthy-green: #00e676;
+            --drift-red: #ff1744;
+            --error-orange: #ff9100;
+            --text-main: #e0e0e0;
+            --text-dim: #90a4ae;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 2rem;
+            line-height: 1.6;
+        }
+
+        /* Section 1: Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #30304a;
+        }
+
+        .header-title h1 {
+            color: var(--accent-blue);
+            font-size: 1.8rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .global-status {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .status-indicator {
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .status-healthy { background: rgba(0, 230, 118, 0.1); color: var(--healthy-green); border: 1px solid var(--healthy-green); }
+        .status-drifted { background: rgba(255, 23, 68, 0.1); color: var(--drift-red); border: 1px solid var(--drift-red); }
+
+        .last-updated {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        /* Section 2: Form */
+        .registration-section {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .registration-section h2 {
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            color: var(--accent-blue);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            align-items: end;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-group label {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        input, select {
+            background: #252545;
+            border: 1px solid #404060;
+            color: white;
+            padding: 0.6rem;
+            border-radius: 4px;
+            outline: none;
+        }
+
+        input:focus { border-color: var(--accent-blue); }
+
+        button {
+            background: var(--accent-blue);
+            color: #000;
+            border: none;
+            padding: 0.7rem 1.2rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            filter: brightness(1.2);
+            transform: translateY(-2px);
+        }
+
+        button.secondary {
+            background: #404060;
+            color: white;
+            font-size: 0.8rem;
+            padding: 0.4rem 0.8rem;
+        }
+
+        /* Section 3: Dashboard */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .endpoint-card {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            position: relative;
+            transition: transform 0.3s ease;
+            border: 1px solid #30304a;
+        }
+
+        .endpoint-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .endpoint-card.drifted {
+            animation: red-glow 2s infinite;
+        }
+
+        @keyframes red-glow {
+            0% { box-shadow: 0 0 5px rgba(255, 23, 68, 0.2); border-color: rgba(255, 23, 68, 0.4); }
+            50% { box-shadow: 0 0 20px rgba(255, 23, 68, 0.4); border-color: var(--drift-red); }
+            100% { box-shadow: 0 0 5px rgba(255, 23, 68, 0.2); border-color: rgba(255, 23, 68, 0.4); }
+        }
+
+        .endpoint-card h3 {
+            margin-bottom: 0.5rem;
+            color: var(--accent-blue);
+        }
+
+        .endpoint-url {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 1rem;
+            word-break: break-all;
+        }
+
+        .endpoint-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .badge-healthy { background: var(--healthy-green); color: black; }
+        .badge-drifted { background: var(--drift-red); color: white; }
+        .badge-error { background: var(--error-orange); color: black; }
+
+        .card-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Section 4: Drift Log */
+        .drift-section {
+            background: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+
+        .drift-section h2 {
+            color: var(--accent-blue);
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.8rem;
+            border-bottom: 1px solid #30304a;
+        }
+
+        th {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .type-badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        .type-added { background: rgba(0, 230, 118, 0.2); color: var(--healthy-green); }
+        .type-removed { background: rgba(255, 23, 68, 0.2); color: var(--drift-red); }
+        .type-changed { background: rgba(255, 145, 0, 0.2); color: var(--error-orange); }
+
+        .field-path {
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--accent-blue);
+        }
+
+        #drift-feed-title {
+            margin-top: 2rem;
+            font-size: 1rem;
+            color: var(--text-dim);
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="loading" class="loading-overlay"><div class="spinner"></div></div>
+
+    <header>
+        <div class="header-title">
+            <h1>API Schema Drift Detector</h1>
+        </div>
+        <div class="global-status">
+            <div id="global-indicator" class="status-indicator status-healthy">ALL HEALTHY</div>
+            <div class="last-updated">Last Refreshed: <span id="last-refresh-time">-</span></div>
+        </div>
+    </header>
+
+    <section class="registration-section">
+        <h2>Register New API</h2>
+        <form id="register-form">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Endpoint Name</label>
+                    <input type="text" id="api-name" placeholder="e.g. GitHub User API" required>
+                </div>
+                <div class="form-group">
+                    <label>URL</label>
+                    <input type="url" id="api-url" placeholder="https://api.example.com/data" required>
+                </div>
+                <div class="form-group">
+                    <label>HTTP Method</label>
+                    <select id="api-method">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Headers (JSON)</label>
+                    <input type="text" id="api-headers" placeholder='{"Authorization":"Bearer token"}'>
+                </div>
+                <button type="submit">Register & Capture Baseline</button>
+            </div>
+        </form>
+    </section>
+
+    <section id="dashboard" class="dashboard-grid">
+        <!-- Cards will be rendered here -->
+    </section>
+
+    <section class="drift-section">
+        <h2 id="drift-title">Latest Drift Feed</h2>
+        <div id="drift-log-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th id="col-api">API Name</th>
+                        <th>Detected At</th>
+                        <th>Change Type</th>
+                        <th>Field Path</th>
+                        <th>Old Value</th>
+                        <th>New Value</th>
+                    </tr>
+                </thead>
+                <tbody id="drift-table-body">
+                    <!-- Events will be rendered here -->
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        const API_BASE = '/api';
+        let currentView = 'latest'; // or 'endpoint'
+
+        async function fetchEndpoints() {
+            try {
+                const res = await fetch(`${API_BASE}/endpoints`);
+                const data = await res.json();
+                renderDashboard(data);
+                updateGlobalStatus(data);
+            } catch (err) {
+                console.error("Failed to fetch endpoints", err);
+            }
+        }
+
+        async function fetchLatestDrift() {
+            try {
+                const res = await fetch(`${API_BASE}/drift/latest`);
+                const data = await res.json();
+                renderDriftTable(data, true);
+                document.getElementById('drift-title').innerText = "Latest Drift Feed (Global)";
+                document.getElementById('col-api').style.display = 'table-cell';
+            } catch (err) {
+                console.error("Failed to fetch latest drift", err);
+            }
+        }
+
+        async function fetchEndpointDrift(id, name) {
+            try {
+                showLoading(true);
+                const res = await fetch(`${API_BASE}/drift/${id}`);
+                const data = await res.json();
+                renderDriftTable(data, false);
+                document.getElementById('drift-title').innerHTML = `
+                    Drift History: ${name} 
+                    <button class="secondary" onclick="clearDrift(${id})">Clear History</button>
+                    <button class="secondary" onclick="fetchLatestDrift()">Back to Global Feed</button>
+                `;
+                document.getElementById('col-api').style.display = 'none';
+                currentView = 'endpoint';
+                showLoading(false);
+            } catch (err) {
+                console.error("Failed to fetch endpoint drift", err);
+                showLoading(false);
+            }
+        }
+
+        function renderDashboard(endpoints) {
+            const container = document.getElementById('dashboard');
+            container.innerHTML = endpoints.map(ep => `
+                <div class="endpoint-card ${ep.status === 'DRIFTED' ? 'drifted' : ''}">
+                    <h3>${ep.name}</h3>
+                    <p class="endpoint-url">${ep.url}</p>
+                    <div class="endpoint-meta">
+                        <span class="badge badge-${ep.status.toLowerCase()}">${ep.status}</span>
+                        <span class="last-updated" style="font-size: 0.7rem;">Checked: ${formatDate(ep.lastChecked)}</span>
+                    </div>
+                    <div class="card-actions">
+                        <button class="secondary" onclick="checkNow(${ep.id})">Check Now</button>
+                        <button class="secondary" onclick="fetchEndpointDrift(${ep.id}, '${ep.name}')">View Drift</button>
+                        <button class="secondary" style="background: rgba(255,23,68,0.1); color: var(--drift-red);" onclick="deleteEndpoint(${ep.id})">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderDriftTable(events, showApiName) {
+            const body = document.getElementById('drift-table-body');
+            if (events.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-dim);">No drift events recorded.</td></tr>';
+                return;
+            }
+            body.innerHTML = events.map(ev => `
+                <tr>
+                    ${showApiName ? `<td>${ev.endpointName}</td>` : ''}
+                    <td>${formatDate(ev.detectedAt)}</td>
+                    <td><span class="type-badge type-${ev.changeType.split('_')[1].toLowerCase()}">${ev.changeType}</span></td>
+                    <td class="field-path">${ev.fieldPath}</td>
+                    <td style="color: #ff8a80">${ev.oldValue}</td>
+                    <td style="color: #b9f6ca">${ev.newValue}</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateGlobalStatus(endpoints) {
+            const indicator = document.getElementById('global-indicator');
+            const drifted = endpoints.filter(e => e.status === 'DRIFTED').length;
+            
+            if (drifted > 0) {
+                indicator.innerText = `${drifted} ENDPOINTS DRIFTED`;
+                indicator.className = 'status-indicator status-drifted';
+            } else {
+                indicator.innerText = 'ALL HEALTHY';
+                indicator.className = 'status-indicator status-healthy';
+            }
+            document.getElementById('last-refresh-time').innerText = new Date().toLocaleTimeString();
+        }
+
+        async function registerApi(e) {
+            e.preventDefault();
+            const payload = {
+                name: document.getElementById('api-name').value,
+                url: document.getElementById('api-url').value,
+                httpMethod: document.getElementById('api-method').value,
+                requestHeaders: document.getElementById('api-headers').value || "{}"
+            };
+
+            showLoading(true);
+            try {
+                const res = await fetch(`${API_BASE}/endpoints`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    alert("API Registered and Baseline Captured!");
+                    document.getElementById('register-form').reset();
+                    fetchEndpoints();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + err.error);
+                }
+            } catch (err) {
+                alert("Request failed: " + err.message);
+            }
+            showLoading(false);
+        }
+
+        async function checkNow(id) {
+            showLoading(true);
+            try {
+                await fetch(`${API_BASE}/endpoints/${id}/check`, { method: 'POST' });
+                fetchEndpoints();
+                if (currentView === 'latest') fetchLatestDrift();
+            } catch (err) {
+                alert("Check failed");
+            }
+            showLoading(false);
+        }
+
+        async function deleteEndpoint(id) {
+            if (!confirm("Are you sure? This will delete the endpoint and all drift history.")) return;
+            try {
+                await fetch(`${API_BASE}/endpoints/${id}`, { method: 'DELETE' });
+                fetchEndpoints();
+                fetchLatestDrift();
+            } catch (err) {
+                alert("Delete failed");
+            }
+        }
+
+        async function clearDrift(id) {
+            try {
+                await fetch(`${API_BASE}/drift/endpoint/${id}`, { method: 'DELETE' });
+                fetchEndpoints();
+                fetchLatestDrift();
+            } catch (err) {
+                alert("Clear failed");
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'flex' : 'none';
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleString();
+        }
+
+        document.getElementById('register-form').addEventListener('submit', registerApi);
+
+        // Initial Load
+        fetchEndpoints();
+        fetchLatestDrift();
+
+        // Auto Refresh
+        setInterval(() => {
+            fetchEndpoints();
+            if (currentView === 'latest') fetchLatestDrift();
+        }, 60000);
+
+    </script>
+</body>
+</html>
